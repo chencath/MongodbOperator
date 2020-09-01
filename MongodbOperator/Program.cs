@@ -22,8 +22,9 @@ namespace MongodbOperator
     {
         static void Main(string[] args)
         {
+            //ConvertFirmList();
             //CopyCollection("news", "1_1000", "Combined");
-            ConvertFirmList();
+            ExportResultToCSV();
         }
 
         public struct QueryParam
@@ -33,6 +34,58 @@ namespace MongodbOperator
             public string companyName;
         }
 
+        static void ExportResultToCSV()
+        {
+            MongoClientSettings mcs = new MongoClientSettings()
+            {
+                //Server = new MongoServerAddress("141.20.100.49", 27017)
+                Server = new MongoServerAddress("127.0.0.1", 27017)
+            };
+            var client = new MongoClient(mcs);
+            var database = client.GetDatabase("news");
+            var sourceCollection = database.GetCollection<BsonDocument>("AnalyzedResult");
+
+            var noFilter = new BsonDocument();
+            var cursor = sourceCollection.Find(noFilter).ToCursor();
+
+            List<BsonDocument> buffer = new List<BsonDocument>();
+
+            string[] fieldNames = new string[]
+            {
+                 "companyName", "endDateTime", "B", "B_a", "B_PN", "B_std", "B_PN_std"
+            };
+
+            
+            StreamWriter sw = new StreamWriter($"{AppContext.BaseDirectory}\\Results.csv",false);
+            sw.WriteLine(String.Join(',', fieldNames));
+            while (cursor.MoveNext())
+            {
+                foreach (BsonDocument doc in cursor.Current)
+                {
+                    string companyName = doc["companyName"].ToString();
+                    DateTime endDateTime = doc["endDateTime"].ToUniversalTime();
+                    string[] values = doc["results"].AsBsonArray.Select(v => Convert.ToDouble(v).ToString("0.0000000000")).ToArray();
+                    string valueStrs = String.Join(',', values);
+                    string line = $"{companyName},{endDateTime.ToString("yyyy/MM/dd")}, {valueStrs}";
+                    sw.WriteLine(line);
+                }
+            }
+            sw.Close();
+        }
+
+        static void s()
+        {
+            MongoClientSettings mcs = new MongoClientSettings()
+            {
+                //Server = new MongoServerAddress("141.20.100.49", 27017)
+                Server = new MongoServerAddress("127.0.0.1", 27017)
+            };
+            var client = new MongoClient(mcs);
+            var database = client.GetDatabase("news");
+            var collection = database.GetCollection<BsonDocument>("Combined");
+
+
+        }
 
         static void ConvertFirmList()
         {
@@ -48,8 +101,8 @@ namespace MongodbOperator
             {
                 queryParams.Add(new QueryParam()
                 {
-                    sDt = (DateTime)result.Tables[0].Rows[rowIndex][0],
-                    eDt = ((DateTime)result.Tables[0].Rows[rowIndex][0]).AddMonths(6),
+                    eDt = (DateTime)result.Tables[0].Rows[rowIndex][0],
+                    sDt = ((DateTime)result.Tables[0].Rows[rowIndex][0]).AddMonths(-6),
                     companyName = (string)result.Tables[0].Rows[rowIndex][1]
                 });
             }
@@ -69,9 +122,9 @@ namespace MongodbOperator
             string line = sr.ReadLine();
             List<QueryParam> queryParams = new List<QueryParam>();
 
-            while(sr.Peek() > 0)
+            while (sr.Peek() > 0)
             {
-                line =  sr.ReadLine();
+                line = sr.ReadLine();
                 string[] fields = line.Split(',');
 
                 string date = fields[0];
@@ -93,11 +146,11 @@ namespace MongodbOperator
                 DateTime sDt = eDt.AddYears(-1);
 
                 queryParams.Add(new QueryParam()
-                { 
+                {
                     companyName = fields[1],
                     sDt = sDt,
                     eDt = eDt,
-                
+
                 });
             }
 
@@ -196,20 +249,20 @@ namespace MongodbOperator
                         }
                         bd.Add(fieldName, BsonValue.Create(result));
                     }
-                    
+
                     if (!fieldComplete)
                     {
                         missingCounts++;
                         continue;
                     }
-                    
+
                     #endregion
 
                     buffer.Add(bd);
                     bufCounter++;
                     totalCounts++;
 
-                    if(bufCounter > 100)
+                    if (bufCounter > 100)
                     {
                         targetCollection.InsertMany(buffer);
                         Console.WriteLine($"has written {totalCounts}");
